@@ -1,0 +1,251 @@
+#include <Arduino.h>
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <AFMotor.h>
+#include <Servo.h>
+// F: Front, B: Back, L: Left, R: Right
+AF_DCMotor motor1(1);
+AF_DCMotor motor2(2);
+AF_DCMotor motor3(3);
+AF_DCMotor motor4(4);
+Servo ESC;
+
+RF24 radio(48, 49);  // CE, CSN
+
+char transmitData[20]={0};
+char transmitDataB[2]={0};
+const byte address[6] = "00001";
+int xLeftJoy,yLeftJoy,xRightJoy,yRightJoy;
+int buttonLeftTop,buttonRightTop, buttonLeftBot, buttonRightBot;
+unsigned long time,temporTime;
+
+void setup(){
+  motor1.setSpeed(200);
+	motor1.run(RELEASE);
+  motor2.setSpeed(200);
+	motor2.run(RELEASE);
+  motor3.setSpeed(200);
+	motor3.run(RELEASE);
+  motor4.setSpeed(200);
+	motor4.run(RELEASE);
+
+  ESC.attach(10,1000,2000); // (pin, min pulse width, max pulse width in microseconds) 
+  pinMode(32,OUTPUT);
+  Serial.begin(9600);
+  time=millis();
+  temporTime=millis();
+  radio.begin();
+  
+  //set the address
+  radio.openReadingPipe(0, address);
+  
+  //Set module as receiver
+  radio.startListening();
+}
+void receiveData(){
+  //Read the data if available in buffer
+  Serial.println("________________");
+  if (radio.available()){
+    radio.read(&transmitData, sizeof(transmitData));
+    String temporValue="";
+    for (int i =0; i<20;i++){
+      if(transmitData[i]!='.'){
+        temporValue+= transmitData[i]; 
+      }
+      // Serial.print(i);
+      // Serial.print(" ");
+      // Serial.println(temporValue);
+      switch (i){
+        case 3:
+          xLeftJoy= temporValue.toInt();
+          temporValue="";
+          break;
+        case 7:
+          yLeftJoy= temporValue.toInt();
+          temporValue="";
+          break;
+        case 11:
+          xRightJoy= temporValue.toInt();
+          temporValue="";
+          break;
+        case 15:
+          yRightJoy= temporValue.toInt();
+          temporValue="";
+          break;
+        case 16:
+          buttonRightTop= temporValue.toInt();
+          temporValue="";
+          break;
+        case 17:
+          buttonRightBot= temporValue.toInt();
+          temporValue="";
+          break;
+        case 18:
+          buttonLeftBot= temporValue.toInt();
+          temporValue="";
+          break;
+        case 19:
+           buttonLeftTop=temporValue.toInt();
+          temporValue="";
+          break;
+        default:
+          break;
+        }
+      
+      
+      // Serial.print(transmitData[i]);
+    }
+   
+    
+  }
+}
+void showData(){
+  Serial.print(xLeftJoy);
+  Serial.print(" ");
+  Serial.print(yLeftJoy);
+  Serial.print(" ");
+  Serial.print(xRightJoy);
+  Serial.print(" ");
+  Serial.print(yRightJoy);
+  Serial.print(" ");
+  Serial.print(buttonLeftTop);
+  Serial.print(" ");
+  Serial.print(buttonRightTop);
+  Serial.print(" ");
+  Serial.print(buttonLeftBot);
+  Serial.print(" ");
+  Serial.print(buttonRightBot);
+  Serial.print(" ");
+  Serial.println();
+}
+void runForward(int velocity=200){
+  motor1.setSpeed(velocity);
+  motor2.setSpeed(velocity);
+  motor3.setSpeed(velocity);
+  motor4.setSpeed(velocity);
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+  motor3.run(FORWARD);
+  motor4.run(FORWARD);
+}
+
+void runBackward(int velocity=200){
+  motor1.setSpeed(velocity);
+  motor2.setSpeed(velocity);
+  motor3.setSpeed(velocity);
+  motor4.setSpeed(velocity);
+  motor1.run(BACKWARD);
+  motor2.run(BACKWARD);
+  motor3.run(BACKWARD);
+  motor4.run(BACKWARD);
+}
+
+void runLeft(int velocity=200){
+  motor1.setSpeed(velocity);
+  motor2.setSpeed(velocity);
+  motor3.setSpeed(velocity);
+  motor4.setSpeed(velocity);
+  motor1.run(BACKWARD);
+  motor2.run(FORWARD);
+  motor3.run(BACKWARD);
+  motor4.run(FORWARD);
+}
+
+void runRight(int velocity=200){
+  motor1.setSpeed(velocity);
+  motor2.setSpeed(velocity);
+  motor3.setSpeed(velocity);
+  motor4.setSpeed(velocity);
+  motor1.run(FORWARD);
+  motor2.run(BACKWARD);
+  motor3.run(FORWARD);
+  motor4.run(BACKWARD);
+}
+
+void runCW(int velocity=100){
+  motor1.setSpeed(velocity);
+  motor2.setSpeed(velocity);
+  motor3.setSpeed(velocity);
+  motor4.setSpeed(velocity);
+  motor1.run(BACKWARD);
+  motor2.run(BACKWARD);
+  motor3.run(FORWARD);
+  motor4.run(FORWARD);
+}
+
+void runCCW(int velocity=100){
+  motor1.setSpeed(velocity);
+  motor2.setSpeed(velocity);
+  motor3.setSpeed(velocity);
+  motor4.setSpeed(velocity);
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+  motor3.run(BACKWARD);
+  motor4.run(BACKWARD);
+}
+
+void stop(){
+  motor1.run(RELEASE);
+  motor2.run(RELEASE);
+  motor3.run(RELEASE);
+  motor4.run(RELEASE);
+}
+void runBLDC(){
+  int bldcValue =map(yRightJoy, 530, 0, 0, 180);
+  ESC.write(bldcValue);
+  // Serial.println(bldcValue);
+}
+void runKick(){
+  yRightJoy=530;
+  runBLDC();
+  digitalWrite(32,HIGH);
+  delay(50);
+  digitalWrite(32,LOW); 
+}
+void startProgram(){
+  receiveData();
+  showData();
+  //controll motion
+  if (buttonLeftTop==0&& buttonRightTop==0){
+    if (yLeftJoy<400){
+      runForward();
+    }else if(yLeftJoy>600){
+      runBackward();
+    }else if (xLeftJoy<400){
+      runLeft();
+    }else if (xLeftJoy>600){
+    runRight();
+    }else{
+      stop();
+    }
+  }else if (buttonLeftTop==1 && buttonRightTop==0){
+    runCCW();
+  }else if (buttonLeftTop==0 && buttonRightTop==1){
+    runCW();
+  }
+  if (yRightJoy<530){
+    runBLDC();
+  }else{
+    yRightJoy=530;
+    runBLDC();
+  }
+  if (buttonLeftBot==1&&(millis()-time)>1000){
+    runKick() ;
+    time=millis();
+  }
+  
+  //control bldc 
+
+  
+}
+
+
+void loop(){
+  startProgram();
+  
+  
+  
+
+
+}
